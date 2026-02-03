@@ -1,178 +1,178 @@
 import streamlit as st
 import pandas as pd
+import math
+
+# ==========================================
+# GEMS ENGINE V2.0 - ROAD ESTIMATOR PRO
+# Fitur: Beton + LC + Tulangan (Dowel/Tie Bar/Wiremesh) + Bekisting
+# ==========================================
+
+st.set_page_config(page_title="GEMS Road Estimator Pro", layout="wide")
+
+# --- JUDUL APLIKASI ---
+st.title("🛣️ GEMS: RAB Jalan Beton (Rigid Pavement) V2.0")
+st.caption("Engineered by The GEMS Grandmaster | Includes: Dowel, Tie Bar, Wiremesh & Formwork")
+st.markdown("---")
 
 # ==========================================
 # 1. DATABASE KOEFISIEN (ENGINEERING CORE)
-# Referensi: AHSP Bidang Bina Marga (SE PUPR)
-# Item: Beton Mutu Sedang fc’ 30 MPa (Setara K-350) untuk Perkerasan Kaku
 # ==========================================
-
 DB_KOEFISIEN = {
-    "Beton K-350 (Rigid Pavement)": {
-        "Tenaga": [
-            {"item": "Pekerja", "koef": 1.650, "satuan": "OH"},
-            {"item": "Tukang Batu", "koef": 0.275, "satuan": "OH"},
-            {"item": "Mandor", "koef": 0.083, "satuan": "OH"},
-        ],
-        "Bahan": [
-            {"item": "Semen Portland", "koef": 386.00, "satuan": "Kg"},
-            {"item": "Pasir Beton", "koef": 692.00, "satuan": "Kg"},
-            {"item": "Agregat Kasar (Split)", "koef": 1039.00, "satuan": "Kg"},
-            {"item": "Air", "koef": 215.00, "satuan": "Liter"},
-            {"item": "Plastic Sheet (50 micron)", "koef": 1.05, "satuan": "m2"}, # Bekisting lantai kerja
-        ],
-        "Alat": [
-            {"item": "Concrete Vibrator", "koef": 0.150, "satuan": "Jam"},
-            {"item": "Water Tanker", "koef": 0.050, "satuan": "Jam"},
-            {"item": "Alat Bantu (Sekop/Gerobak)", "koef": 1.000, "satuan": "Ls"},
-        ]
+    "Beton K-350 (Rigid)": {
+        "Semen Portland": 386.00, "Pasir Beton": 692.00, 
+        "Agregat Kasar (Split)": 1039.00, "Air": 215.00,
+        "Concrete Vibrator": 0.150, "Upah Cor (Borong)": 1.0 
     },
-    "Lean Concrete (Lantai Kerja) K-125": {
-        "Tenaga": [
-            {"item": "Pekerja", "koef": 1.200, "satuan": "OH"},
-            {"item": "Tukang Batu", "koef": 0.200, "satuan": "OH"},
-        ],
-        "Bahan": [
-            {"item": "Semen Portland", "koef": 276.00, "satuan": "Kg"},
-            {"item": "Pasir Beton", "koef": 828.00, "satuan": "Kg"},
-            {"item": "Agregat Kasar (Split)", "koef": 1012.00, "satuan": "Kg"},
-             {"item": "Air", "koef": 215.00, "satuan": "Liter"},
-        ],
-        "Alat": [
-             {"item": "Concrete Mixer (Molen)", "koef": 0.250, "satuan": "Jam"},
-        ]
+    "Lean Concrete (LC) K-125": {
+        "Semen Portland": 276.00, "Pasir Beton": 828.00, 
+        "Agregat Kasar (Split)": 1012.00, "Air": 215.00,
+        "Upah Cor (Borong)": 1.0
     }
 }
 
 # ==========================================
-# 2. FRONTEND & LOGIC (STREAMLIT)
+# 2. SIDEBAR INPUT (DIMENSI & TEKNIS)
 # ==========================================
-
-st.set_page_config(page_title="GEMS AHSP Calculator", layout="wide")
-
-st.title("🛣️ GEMS: RAB Jalan Beton (Rigid Pavement)")
-st.caption("Engineered by The GEMS Grandmaster | Standard: AHSP Bina Marga (SE PUPR No.182)")
-st.markdown("---")
-
-# --- SIDEBAR: INPUT DIMENSI JALAN ---
 with st.sidebar:
-    st.header("📐 Dimensi Jalan")
+    st.header("📐 1. Dimensi Fisik Jalan")
     panjang = st.number_input("Panjang Jalan (m)", value=100.0, step=10.0)
     lebar = st.number_input("Lebar Jalan (m)", value=5.0, step=0.5)
-    tebal = st.number_input("Tebal Beton K-350 (cm)", value=25.0, step=1.0) / 100 # Konversi ke m
-    tebal_lc = st.number_input("Tebal Lantai Kerja (LC) (cm)", value=10.0, step=1.0) / 100 # Konversi ke m
+    tebal = st.number_input("Tebal Beton K-350 (cm)", value=25.0) / 100
+    tebal_lc = st.number_input("Tebal LC (cm)", value=10.0) / 100
 
+    st.header("⚙️ 2. Spesifikasi Tulangan")
+    # Dowel Specs
+    st.markdown("**A. Dowel (Sambungan Melintang)**")
+    jarak_dowel = st.number_input("Jarak Antar Sambungan/Segmen (m)", value=5.0)
+    dia_dowel = st.number_input("Diameter Dowel (mm) - Polos", value=32)
+    pjg_dowel = st.number_input("Panjang 1 btg Dowel (cm)", value=45) / 100
+    jarak_pasang_dowel = st.number_input("Jarak pemasangan Dowel (cm)", value=30) / 100
+
+    # Tie Bar Specs
+    st.markdown("**B. Tie Bar (Sambungan Memanjang)**")
+    pakai_tiebar = st.checkbox("Pakai Tie Bar?", value=True)
+    dia_tiebar = st.number_input("Diameter Tie Bar (mm) - Ulir", value=16)
+    pjg_tiebar = st.number_input("Panjang 1 btg Tie Bar (cm)", value=70) / 100
+    jarak_pasang_tiebar = st.number_input("Jarak pemasangan Tie Bar (cm)", value=75) / 100
+
+    # Wiremesh Specs
+    st.markdown("**C. Wiremesh & Bekisting**")
+    pakai_wiremesh = st.checkbox("Pakai Wiremesh (1 Lapis)?", value=False)
+    jenis_wiremesh = st.selectbox("Jenis Wiremesh", ["M-6", "M-8", "M-10"])
+    
+    # Mapping berat wiremesh (kg/m2) estimasi
+    berat_wiremesh_map = {"M-6": 2.5, "M-8": 4.5, "M-10": 6.8}
+    
+    # Hitung Volume Basic
     vol_beton = panjang * lebar * tebal
     vol_lc = panjang * lebar * tebal_lc
-    
-    st.info(f"🔢 **Volume Beton K-350:** {vol_beton:.2f} m³")
-    st.info(f"🔢 **Volume LC:** {vol_lc:.2f} m³")
+    luas_bekisting = panjang * tebal * 2 # Kiri dan Kanan
 
-# --- TAB SETUP ---
-tab1, tab2 = st.tabs(["💰 Database Harga Dasar", "📊 Hasil RAB & AHSP"])
+    st.info(f"Volume Beton: {vol_beton:.2f} m³")
+    st.info(f"Luas Bekisting: {luas_bekisting:.2f} m²")
 
-# --- TAB 1: INPUT HARGA DASAR (DATABASE) ---
+# ==========================================
+# 3. INPUT HARGA & LOGIKA
+# ==========================================
+tab1, tab2 = st.tabs(["💰 Input Harga Satuan", "📊 Hasil RAB Lengkap"])
+
 with tab1:
-    st.subheader("Update Harga Satuan Dasar (HSD) - Lokasi Proyek")
-    col1, col2, col3 = st.columns(3)
+    st.subheader("Update Harga Satuan Dasar (HSD)")
+    c1, c2 = st.columns(2)
     
-    # Default values (Simulasi Harga Lampung 2026)
-    with col1:
-        st.markdown("**🛠️ Upah Tenaga (HOK)**")
-        h_pekerja = st.number_input("Pekerja / hari", value=120000)
-        h_tukang = st.number_input("Tukang / hari", value=150000)
-        h_mandor = st.number_input("Mandor / hari", value=180000)
-
-    with col2:
-        st.markdown("**🧱 Harga Material**")
-        h_semen = st.number_input("Semen (per Kg)", value=1800) # ~90rb/sak
-        h_pasir = st.number_input("Pasir Beton (per Kg)", value=250) # ~350rb/m3
-        h_split = st.number_input("Split/Kerikil (per Kg)", value=300) # ~400rb/m3
+    with c1:
+        st.markdown("**Material Beton**")
+        h_semen = st.number_input("Semen (per Kg)", value=1800)
+        h_pasir = st.number_input("Pasir (per Kg)", value=250)
+        h_split = st.number_input("Split (per Kg)", value=300)
         h_air = st.number_input("Air (per Liter)", value=50)
-        h_plastic = st.number_input("Plastic Sheet (per m2)", value=5000)
-
-    with col3:
-        st.markdown("**🚜 Harga Sewa Alat**")
-        h_vibrator = st.number_input("Vibrator (per Jam)", value=75000)
-        h_mixer = st.number_input("Molen/Mixer (per Jam)", value=85000)
-        h_tanker = st.number_input("Water Tanker (per Jam)", value=150000)
-        h_alatbantu = st.number_input("Alat Bantu (Lumpsum)", value=50000)
-
-    # Dictionary Map untuk mempermudah pemanggilan harga
-    HARGA_DASAR = {
-        "Pekerja": h_pekerja, "Tukang Batu": h_tukang, "Mandor": h_mandor,
-        "Semen Portland": h_semen, "Pasir Beton": h_pasir, "Agregat Kasar (Split)": h_split,
-        "Air": h_air, "Plastic Sheet (50 micron)": h_plastic,
-        "Concrete Vibrator": h_vibrator, "Water Tanker": h_tanker, 
-        "Concrete Mixer (Molen)": h_mixer, "Alat Bantu (Sekop/Gerobak)": h_alatbantu
-    }
-
-# --- LOGIKA HITUNG AHSP (BACKEND) ---
-def hitung_ahsp(item_pekerjaan):
-    data_analisa = DB_KOEFISIEN[item_pekerjaan]
-    rincian = []
-    total_ahsp = 0
-    
-    # Loop semua kategori (Tenaga, Bahan, Alat)
-    for kategori, items in data_analisa.items():
-        subtotal_kategori = 0
-        for i in items:
-            nama = i["item"]
-            koef = i["koef"]
-            satuan = i["satuan"]
-            
-            # Ambil harga dari input user
-            harga_satuan = HARGA_DASAR.get(nama, 0)
-            
-            # Hitung total
-            jumlah_harga = koef * harga_satuan
-            subtotal_kategori += jumlah_harga
-            
-            rincian.append({
-                "Kategori": kategori,
-                "Uraian": nama,
-                "Koefisien": koef,
-                "Satuan": satuan,
-                "Harga Satuan (Rp)": harga_satuan,
-                "Jumlah Harga (Rp)": jumlah_harga
-            })
-        total_ahsp += subtotal_kategori
         
-    return total_ahsp, pd.DataFrame(rincian)
+        st.markdown("**Upah & Bekisting**")
+        h_upah_cor = st.number_input("Upah Cor Borongan (per m3)", value=150000, help="Termasuk alat")
+        h_bekisting = st.number_input("Bekisting Jadi (per m2)", value=185000, help="Material kayu/baja + upah pasang")
 
-# --- TAB 2: HASIL PERHITUNGAN ---
+    with c2:
+        st.markdown("**Besi & Tulangan**")
+        h_besi_polos = st.number_input("Besi Polos (per Kg)", value=14500)
+        h_besi_ulir = st.number_input("Besi Ulir (per Kg)", value=15500)
+        h_wiremesh = st.number_input("Wiremesh (per Kg)", value=16000)
+        h_dudukan = st.number_input("Dudukan/Chair (Lumpsum)", value=2500000, help="Biaya kawat, dudukan besi, plastik cor")
+
+# --- FUNGSI HITUNG BERAT BESI ---
+def hitung_berat_besi(diameter_mm, panjang_m, jumlah_batang):
+    # Rumus: 0.006165 * D^2 * L * Jml
+    berat_per_m = 0.006165 * (diameter_mm ** 2)
+    return berat_per_m * panjang_m * jumlah_batang
+
+# --- LOGIKA UTAMA ---
 with tab2:
-    if st.button("🚀 HITUNG RAB SEKARANG", type="primary"):
+    if st.button("🚀 HITUNG RAB LENGKAP", type="primary"):
         
-        # 1. Hitung AHSP Rigid
-        hsp_rigid, df_rigid = hitung_ahsp("Beton K-350 (Rigid Pavement)")
-        total_rigid = hsp_rigid * vol_beton
+        # A. HITUNG BETON (RIGID + LC)
+        # Simple AHSP Logic for Material
+        biaya_mat_rigid = (DB_KOEFISIEN["Beton K-350 (Rigid)"]["Semen Portland"] * h_semen) + \
+                          (DB_KOEFISIEN["Beton K-350 (Rigid)"]["Pasir Beton"] * h_pasir) + \
+                          (DB_KOEFISIEN["Beton K-350 (Rigid)"]["Agregat Kasar (Split)"] * h_split) + \
+                          (DB_KOEFISIEN["Beton K-350 (Rigid)"]["Air"] * h_air)
         
-        # 2. Hitung AHSP LC
-        hsp_lc, df_lc = hitung_ahsp("Lean Concrete (Lantai Kerja) K-125")
-        total_lc = hsp_lc * vol_lc
+        harga_satuan_rigid = biaya_mat_rigid + h_upah_cor
+        total_rigid = harga_satuan_rigid * vol_beton
+
+        biaya_mat_lc = (DB_KOEFISIEN["Lean Concrete (LC) K-125"]["Semen Portland"] * h_semen) + \
+                       (DB_KOEFISIEN["Lean Concrete (LC) K-125"]["Pasir Beton"] * h_pasir) + \
+                       (DB_KOEFISIEN["Lean Concrete (LC) K-125"]["Agregat Kasar (Split)"] * h_split)
         
-        # TAMPILKAN REKAPITULASI
-        st.subheader("📑 Rekapitulasi RAB")
-        
-        rekap_data = [
-            {"Uraian": "Pekerjaan Beton K-350 (Rigid)", "Vol": vol_beton, "Sat": "m³", "Harga Satuan": hsp_rigid, "Total": total_rigid},
-            {"Uraian": "Pekerjaan Lantai Kerja (LC)", "Vol": vol_lc, "Sat": "m³", "Harga Satuan": hsp_lc, "Total": total_lc},
+        harga_satuan_lc = biaya_mat_lc + h_upah_cor
+        total_lc = harga_satuan_lc * vol_lc
+
+        # B. HITUNG BESI DOWEL (Polos)
+        jml_segmen = math.ceil(panjang / jarak_dowel) # Pembulatan ke atas
+        btg_per_segmen = math.ceil(lebar / jarak_pasang_dowel)
+        total_btg_dowel = jml_segmen * btg_per_segmen
+        berat_dowel = hitung_berat_besi(dia_dowel, pjg_dowel, total_btg_dowel)
+        biaya_dowel = berat_dowel * h_besi_polos
+
+        # C. HITUNG BESI TIE BAR (Ulir)
+        berat_tiebar = 0
+        biaya_tiebar = 0
+        if pakai_tiebar:
+            jml_baris_tiebar = math.ceil(panjang / jarak_pasang_tiebar)
+            total_btg_tiebar = jml_baris_tiebar # Asumsi 1 lajur tengah
+            berat_tiebar = hitung_berat_besi(dia_tiebar, pjg_tiebar, total_btg_tiebar)
+            biaya_tiebar = berat_tiebar * h_besi_ulir
+
+        # D. HITUNG WIREMESH
+        biaya_wiremesh = 0
+        berat_total_wm = 0
+        if pakai_wiremesh:
+            luas_area = panjang * lebar
+            kg_per_m2 = berat_wiremesh_map[jenis_wiremesh]
+            berat_total_wm = luas_area * kg_per_m2
+            biaya_wiremesh = berat_total_wm * h_wiremesh
+
+        # E. HITUNG BEKISTING
+        biaya_bekisting = luas_bekisting * h_bekisting
+
+        # F. REKAPITULASI
+        grand_total = total_rigid + total_lc + biaya_dowel + biaya_tiebar + biaya_wiremesh + biaya_bekisting + h_dudukan
+
+        # --- TAMPILAN HASIL ---
+        st.subheader("📑 Rekapitulasi Biaya Proyek")
+        st.metric("ESTIMASI BIAYA TOTAL", f"Rp {grand_total:,.0f}")
+
+        # Dataframe Tampilan
+        data_rab = [
+            ["1. Pekerjaan Beton K-350", f"{vol_beton:.2f} m³", f"Rp {harga_satuan_rigid:,.0f}", f"Rp {total_rigid:,.0f}"],
+            ["2. Pekerjaan Lantai Kerja (LC)", f"{vol_lc:.2f} m³", f"Rp {harga_satuan_lc:,.0f}", f"Rp {total_lc:,.0f}"],
+            ["3. Besi Dowel (Ruji)", f"{berat_dowel:.1f} Kg", f"Rp {h_besi_polos:,.0f}", f"Rp {biaya_dowel:,.0f}"],
+            ["4. Besi Tie Bar (Pengikat)", f"{berat_tiebar:.1f} Kg", f"Rp {h_besi_ulir:,.0f}", f"Rp {biaya_tiebar:,.0f}"],
+            ["5. Wiremesh", f"{berat_total_wm:.1f} Kg", f"Rp {h_wiremesh:,.0f}", f"Rp {biaya_wiremesh:,.0f}"],
+            ["6. Bekisting Samping", f"{luas_bekisting:.2f} m²", f"Rp {h_bekisting:,.0f}", f"Rp {biaya_bekisting:,.0f}"],
+            ["7. Alat Bantu & Dudukan", "1.00 Ls", f"Rp {h_dudukan:,.0f}", f"Rp {h_dudukan:,.0f}"],
         ]
-        df_rekap = pd.DataFrame(rekap_data)
-        grand_total = df_rekap["Total"].sum()
-        
-        # Format Currency
-        st.metric(label="GRAND TOTAL RAB", value=f"Rp {grand_total:,.0f}")
-        st.table(df_rekap.style.format({"Harga Satuan": "Rp {:,.2f}", "Total": "Rp {:,.2f}"}))
-        
-        # TAMPILKAN DETAIL AHSP (ANALISA)
-        with st.expander("🔍 Lihat Detail Analisa Harga Satuan (AHSP) K-350"):
-            st.write(f"**Harga Satuan per m³: Rp {hsp_rigid:,.2f}**")
-            st.dataframe(df_rigid.style.format({"Harga Satuan (Rp)": "{:,.2f}", "Jumlah Harga (Rp)": "{:,.2f}"}))
-            
-        with st.expander("🔍 Lihat Detail Analisa Harga Satuan (AHSP) LC"):
-            st.write(f"**Harga Satuan per m³: Rp {hsp_lc:,.2f}**")
-            st.dataframe(df_lc.style.format({"Harga Satuan (Rp)": "{:,.2f}", "Jumlah Harga (Rp)": "{:,.2f}"}))
-            
-        st.success("✅ Perhitungan selesai menggunakan Standar AHSP & Harga Real-time.")
+
+        df_show = pd.DataFrame(data_rab, columns=["Uraian Pekerjaan", "Volume", "Harga Satuan", "Total Harga"])
+        st.table(df_show)
+
+        # Download Button Placeholder
+        st.caption("✅ Perhitungan V2.0 mencakup struktur besi & bekisting.")
